@@ -83,8 +83,14 @@ void reconnect()
       Serial.println("connected");
       // Once connected, publish an announcement...
       client.publish("hidroponik/esp32/suhu", String(suhu).c_str());
+      client.publish("hidroponik/esp32/ph", String(ph_act).c_str());
+      client.publish("hidroponik/esp32/tds", String(tdsValue).c_str());
+      client.publish("hidroponik/esp32/distance", String(distanceCm).c_str());
       // ... and resubscribe
       client.subscribe("hidroponik/esp32/suhu");
+      client.subscribe("hidroponik/esp32/ph");
+      client.subscribe("hidroponik/esp32/tds");
+      client.subscribe("hidroponik/esp32/distance");
     }
     else
     {
@@ -150,7 +156,7 @@ void loop()
     client.publish("hidroponik/esp32/nutrisi", nutString);
     Serial.printf("Nutrisi: %f\n", tdsValue);
     lcd.setCursor(0, 0);
-    lcd.printf("Nutrisi: %f ppm", tdsValue);
+    lcd.printf("N: %f ppm", tdsValue);
 
     delay(2500);
     lcd.clear();
@@ -162,10 +168,10 @@ void loop()
     char tempString[8];
     dtostrf(suhu, 1, 2, tempString);
     client.publish("hidroponik/esp32/suhu", tempString);
-    Serial.printf("Suhu: %f\n", tempString);
+    Serial.printf("Suhu: %f\n", suhu);
 
     lcd.setCursor(0, 1);
-    lcd.printf("Suhu: %f C", suhu);
+    lcd.printf("T: %f C", suhu);
 
     delay(2500);
     lcd.clear();
@@ -226,6 +232,8 @@ void loop()
     client.publish("hidroponik/esp32/ketinggian", distanceString);
     Serial.printf("Distance (cm): %f\n", distanceCm);
 
+    lcd.setCursor(3, 1);
+    lcd.printf("A: %f ", distanceCm);
     delay(2500);
     lcd.clear();
     // end distance

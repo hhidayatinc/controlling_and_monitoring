@@ -13,10 +13,10 @@
 #include <LiquidCrystal_I2C.h>
 #include <ArduinoJson.h>
 
-const char *ssid = "JTI-POLINEMA";
-const char *password = "jtifast!";
+const char *ssid = "Rizqi";
+const char *password = "rizqioke";
 const char *mqtt_server = "test.mosquitto.org";
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+LiquidCrystal_I2C lcd(0x27, 16, 2); //lcd sda 21, scl 22
 #define ONE_WIRE_BUS 5  // Digitalpin where Temp sensor is connected
 #define TdsSensorPin 35 // Where Analog pin of TDS sensor is connected to arduino
 #define SOUND_SPEED 0.034
@@ -44,7 +44,7 @@ unsigned long lastMsg = 0;
 char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
-void callback(char *topic, byte *payload, unsigned int length)
+void callback(char *topic, byte *payload, unsigned int length)//hanya mengambil satu topik suhu saja
 {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -238,31 +238,31 @@ void loop()
     lcd.clear();
     // end distance
   }
-  // start send data
-  String url;
-  url = "http://192.168.72.107/hidroponik/webapi/api/create.php?nutrisi=";
-  url += String(tdsValue);
-  url += "&suhu=";
-  url += String(suhu);
-  url += "&pH=";
-  url += String(ph_act);
-  url += "&air=";
-  url += String(distanceCm);
-
-  HTTPClient http;
-  http.begin(url);           // Specify request destination
-  int httpCode = http.GET(); // Send the request
-  String payload;
-  if (httpCode > 0)
-  {                             // Check the returning code
-    payload = http.getString(); // Get the request response payload
-    payload.trim();
-    if (payload.length() > 0)
-    {
-      Serial.println(payload + "\n");
-    }
-  }
-
-  http.end();   // Close connection
-  delay(60000); // interval 60s
+//  // start send data
+//  String url;
+//  url = "http://192.168.0.15/hidroponik/webapi/api/create.php?nutrisi=";
+//  url += String(tdsValue);
+//  url += "&suhu=";
+//  url += String(suhu);
+//  url += "&pH=";
+//  url += String(ph_act);
+//  url += "&air=";
+//  url += String(distanceCm);
+//
+//  HTTPClient http;
+//  http.begin(url);           // Specify request destination
+//  int httpCode = http.GET(); // Send the request
+//  String payload;
+//  if (httpCode > 0)
+//  {                             // Check the returning code
+//    payload = http.getString(); // Get the request response payload
+//    payload.trim();
+//    if (payload.length() > 0)
+//    {
+//      Serial.println(payload + "\n");
+//    }
+//  }
+//
+//  http.end();   // Close connection
+//  delay(60000); // interval 60s
 }

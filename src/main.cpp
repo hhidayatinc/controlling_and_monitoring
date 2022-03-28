@@ -82,13 +82,13 @@ void reconnect()
     {
       Serial.println("connected");
       // Once connected, publish an announcement...
-      client.publish("hidroponik/esp32/suhu", String(suhu).c_str());
       client.publish("hidroponik/esp32/ph", String(ph_act).c_str());
+      client.publish("hidroponik/esp32/suhu", String(suhu).c_str());
       client.publish("hidroponik/esp32/tds", String(tdsValue).c_str());
       client.publish("hidroponik/esp32/distance", String(distanceCm).c_str());
       // ... and resubscribe
-      client.subscribe("hidroponik/esp32/suhu");
       client.subscribe("hidroponik/esp32/ph");
+      client.subscribe("hidroponik/esp32/suhu");
       client.subscribe("hidroponik/esp32/tds");
       client.subscribe("hidroponik/esp32/distance");
     }
@@ -153,7 +153,7 @@ void loop()
     tdsValue = gravityTds.getTdsValue();                   // then get the TDS value
     char nutString[8];
     dtostrf(tdsValue, 1, 2, nutString);
-    client.publish("hidroponik/esp32/nutrisi", nutString);
+    client.publish("hidroponik/esp32/tds", nutString);
     Serial.printf("Nutrisi: %f\n", tdsValue);
     lcd.setCursor(0, 0);
     lcd.printf("N: %f ppm", tdsValue);
@@ -202,7 +202,7 @@ void loop()
     ph_act = -5.70 * volt + calibration_value;
     char pHString[8];
     dtostrf(ph_act, 1, 2, pHString);
-    client.publish("hidroponik/esp32/pH", pHString);
+    client.publish("hidroponik/esp32/ph", pHString);
     Serial.printf("pH: %f\n", ph_act);
     lcd.setCursor(3, 0);
     lcd.printf("pH: %f ", ph_act);
@@ -228,8 +228,8 @@ void loop()
 
     // Prints the distance in the Serial Monitor
     char distanceString[8];
-    dtostrf(distanceCm, 1, 2, tempString);
-    client.publish("hidroponik/esp32/ketinggian", distanceString);
+    dtostrf(distanceCm, 1, 2, distanceString);
+    client.publish("hidroponik/esp32/distance", distanceString);
     Serial.printf("Distance (cm): %f\n", distanceCm);
 
     lcd.setCursor(3, 1);

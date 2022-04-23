@@ -16,9 +16,9 @@
 const char *ssid = "Rizqi";
 const char *password = "rizqioke";
 const char *mqtt_server = "test.mosquitto.org";
-LiquidCrystal_I2C lcd(0x27, 16, 2); //lcd sda 21, scl 22
-#define ONE_WIRE_BUS 5  // Digitalpin where Temp sensor is connected
-#define TdsSensorPin 35 // Where Analog pin of TDS sensor is connected to arduino
+LiquidCrystal_I2C lcd(0x27, 16, 2); // lcd sda 21, scl 22
+#define ONE_WIRE_BUS 5              // Digitalpin where Temp sensor is connected
+#define TdsSensorPin 35             // Where Analog pin of TDS sensor is connected to arduino
 #define SOUND_SPEED 0.034
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -37,6 +37,9 @@ unsigned long int avgval;
 int buffer_arr[10], temp;
 float ph_act;
 
+// add some variables for pump (water, nutrition a, b) boolean
+// add variable for time
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 unsigned long lastMsg = 0;
@@ -44,7 +47,8 @@ unsigned long lastMsg = 0;
 char msg[MSG_BUFFER_SIZE];
 int value = 0;
 
-void callback(char *topic, byte *payload, unsigned int length)//hanya mengambil satu topik suhu saja
+// In the callback() function, the ESP32 receives the MQTT messages of the subscribed topics.
+void callback(char *topic, byte *payload, unsigned int length)
 {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -55,17 +59,30 @@ void callback(char *topic, byte *payload, unsigned int length)//hanya mengambil 
   }
   Serial.println();
 
-  // Switch on the LED if an 1 was received as first character
-  if ((char)payload[0] == '1')
-  {
-    digitalWrite(BUILTIN_LED, LOW); // Turn the LED on (Note that LOW is the voltage level
-    // but actually the LED is on; this is because
-    // it is active low on the ESP-01)
-  }
-  if ((char)payload[0] == '0')
-  {
-    digitalWrite(BUILTIN_LED, HIGH); // Turn the LED off by making the voltage HIGH
-  }
+  // // Switch on the LED if an 1 was received as first character
+  // if ((char)payload[0] == '1')
+  // {
+  //   digitalWrite(BUILTIN_LED, LOW); // Turn the LED on (Note that LOW is the voltage level
+  //   // but actually the LED is on; this is because
+  //   // it is active low on the ESP-01)
+  // }
+  // if ((char)payload[0] == '0')
+  // {
+  //   digitalWrite(BUILTIN_LED, HIGH); // Turn the LED off by making the voltage HIGH
+  // }
+}
+
+void save_data(){
+  // save data to flash memory
+  Serial.println("Saving data to flash memory");
+  EEPROM.write(0, 1);
+  EEPROM.write(1, suhu);
+  EEPROM.write(2, tdsValue);
+  EEPROM.write(3, ph_act);
+  EEPROM.write(4, distanceCm);
+  EEPROM.commit();
+  Serial.println("Data saved");
+  delay(10000);
 }
 
 void reconnect()
@@ -92,15 +109,32 @@ void reconnect()
       client.subscribe("hidroponik/esp32/tds");
       client.subscribe("hidroponik/esp32/distance");
     }
-    else
+    else // if !client.connect() call func save data to local direcotry(flash memory)
     {
-      Serial.print("failed, rc=");
+      Serial.print("Saving data sensor to flash memory -----");
+      save_data();
+      Serial.print("Connection server failed, rc=");
       Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
+      Serial.println(" Try again in 5 seconds");
       // Wait 5 seconds before retrying
       delay(5000);
     }
   }
+}
+
+void setup_wifi()
+{
+  // wifi
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting...");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.print("Connected: ");
+  Serial.println(WiFi.localIP());
 }
 
 void setup()
@@ -115,23 +149,123 @@ void setup()
   gravityTds.setAdcRange(4096); // 1024 for 10bit ADC;4096 for 12bit ADC
   gravityTds.begin();           // initialization
   Wire.begin();
-  // wifi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting...");
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    Serial.print(".");
-    delay(500);
-  }
-  Serial.println();
-  Serial.print("Connected: ");
-  Serial.println(WiFi.localIP());
 
+  setup_wifi();
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
 
   lcd.init();
   lcd.backlight();
+}
+
+void read_sensor()
+{
+  // start nutrisi
+  sensors.requestTemperatures();
+  gravityTds.setTemperature(sensors.getTempCByIndex(0)); // grab the temperature from sensor and execute temperature compensation
+  gravityTds.update();                                   // calculation done here from gravity library
+  tdsValue = gravityTds.getTdsValue();                   // then get the TDS value
+  if (client.connected())
+  {
+    char nutString[8];
+    dtostrf(tdsValue, 1, 2, nutString);
+    client.publish("hidroponik/esp32/tds", nutString);
+  }
+  Serial.printf("Nutrisi: %f\n", tdsValue);
+  lcd.setCursor(0, 0);
+  lcd.printf("N: %f ppm", tdsValue);
+
+  delay(2500);
+  lcd.clear();
+  // end nutrisi
+
+  // start suhu
+  sensors.requestTemperatures();
+  suhu = sensors.getTempCByIndex(0);
+  if (client.connected())
+  {
+    char tempString[8];
+    dtostrf(suhu, 1, 2, tempString);
+    client.publish("hidroponik/esp32/suhu", tempString);
+  }
+
+  Serial.printf("Suhu: %f\n", suhu);
+
+  lcd.setCursor(0, 1);
+  lcd.printf("T: %f C", suhu);
+
+  delay(2500);
+  lcd.clear();
+  // end suhu
+
+  // start pH
+  for (int i = 0; i < 10; i++)
+  {
+    buffer_arr[i] = analogRead(32);
+    delay(30);
+  }
+  for (int i = 0; i < 9; i++)
+  {
+    for (int j = i + 1; j < 10; j++)
+    {
+      if (buffer_arr[i] > buffer_arr[j])
+      {
+        temp = buffer_arr[i];
+        buffer_arr[i] = buffer_arr[j];
+        buffer_arr[j] = temp;
+      }
+    }
+  }
+  avgval = 0;
+  for (int i = 2; i < 8; i++)
+    avgval += buffer_arr[i];
+  float volt = (float)avgval * 3.3 / 4095 / 6;
+  ph_act = -5.70 * volt + calibration_value;
+  if (client.connected())
+  {
+    char pHString[8];
+    dtostrf(ph_act, 1, 2, pHString);
+    client.publish("hidroponik/esp32/ph", pHString);
+  }
+
+  Serial.printf("pH: %f\n", ph_act);
+  lcd.setCursor(3, 0);
+  lcd.printf("pH: %f ", ph_act);
+
+  delay(2500);
+  lcd.clear();
+  // end pH
+
+  // start distance
+  // Clears the trigPin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  // Sets the trigPin on HIGH state for 10 micro seconds
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Reads the echoPin, returns the sound wave travel time in microseconds
+  duration = pulseIn(echoPin, HIGH);
+
+  // Calculate the distance
+  distanceCm = duration * SOUND_SPEED / 2;
+
+  // Prints the distance in the Serial Monitor
+  if (client.connected())
+  {
+    char distanceString[8];
+    dtostrf(distanceCm, 1, 2, distanceString);
+    client.publish("hidroponik/esp32/distance", distanceString);
+  }
+
+  Serial.printf("Distance (cm): %f\n", distanceCm);
+
+  lcd.setCursor(3, 1);
+  lcd.printf("A: %f ", distanceCm);
+  delay(2500);
+  lcd.clear();
+  // end distance
 }
 
 void loop()
@@ -146,123 +280,9 @@ void loop()
   {
     lastMsg = now;
     // put your main code here, to run repeatedly:
-    // start nutrisi
-    sensors.requestTemperatures();
-    gravityTds.setTemperature(sensors.getTempCByIndex(0)); // grab the temperature from sensor and execute temperature compensation
-    gravityTds.update();                                   // calculation done here from gravity library
-    tdsValue = gravityTds.getTdsValue();                   // then get the TDS value
-    char nutString[8];
-    dtostrf(tdsValue, 1, 2, nutString);
-    client.publish("hidroponik/esp32/tds", nutString);
-    Serial.printf("Nutrisi: %f\n", tdsValue);
-    lcd.setCursor(0, 0);
-    lcd.printf("N: %f ppm", tdsValue);
-
-    delay(2500);
-    lcd.clear();
-    // end nutrisi
-
-    // start suhu
-    sensors.requestTemperatures();
-    suhu = sensors.getTempCByIndex(0);
-    char tempString[8];
-    dtostrf(suhu, 1, 2, tempString);
-    client.publish("hidroponik/esp32/suhu", tempString);
-    Serial.printf("Suhu: %f\n", suhu);
-
-    lcd.setCursor(0, 1);
-    lcd.printf("T: %f C", suhu);
-
-    delay(2500);
-    lcd.clear();
-    // end suhu
-
-    // start pH
-    for (int i = 0; i < 10; i++)
-    {
-      buffer_arr[i] = analogRead(32);
-      delay(30);
-    }
-    for (int i = 0; i < 9; i++)
-    {
-      for (int j = i + 1; j < 10; j++)
-      {
-        if (buffer_arr[i] > buffer_arr[j])
-        {
-          temp = buffer_arr[i];
-          buffer_arr[i] = buffer_arr[j];
-          buffer_arr[j] = temp;
-        }
-      }
-    }
-    avgval = 0;
-    for (int i = 2; i < 8; i++)
-      avgval += buffer_arr[i];
-    float volt = (float)avgval * 3.3 / 4095 / 6;
-    ph_act = -5.70 * volt + calibration_value;
-    char pHString[8];
-    dtostrf(ph_act, 1, 2, pHString);
-    client.publish("hidroponik/esp32/ph", pHString);
-    Serial.printf("pH: %f\n", ph_act);
-    lcd.setCursor(3, 0);
-    lcd.printf("pH: %f ", ph_act);
-
-    delay(2500);
-    lcd.clear();
-    // end pH
-
-    // start distance
-    // Clears the trigPin
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
-    // Sets the trigPin on HIGH state for 10 micro seconds
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPin, LOW);
-
-    // Reads the echoPin, returns the sound wave travel time in microseconds
-    duration = pulseIn(echoPin, HIGH);
-
-    // Calculate the distance
-    distanceCm = duration * SOUND_SPEED / 2;
-
-    // Prints the distance in the Serial Monitor
-    char distanceString[8];
-    dtostrf(distanceCm, 1, 2, distanceString);
-    client.publish("hidroponik/esp32/distance", distanceString);
-    Serial.printf("Distance (cm): %f\n", distanceCm);
-
-    lcd.setCursor(3, 1);
-    lcd.printf("A: %f ", distanceCm);
-    delay(2500);
-    lcd.clear();
-    // end distance
+    // read sensor
+    read_sensor();
   }
-//  // start send data
-//  String url;
-//  url = "http://192.168.0.15/hidroponik/webapi/api/create.php?nutrisi=";
-//  url += String(tdsValue);
-//  url += "&suhu=";
-//  url += String(suhu);
-//  url += "&pH=";
-//  url += String(ph_act);
-//  url += "&air=";
-//  url += String(distanceCm);
-//
-//  HTTPClient http;
-//  http.begin(url);           // Specify request destination
-//  int httpCode = http.GET(); // Send the request
-//  String payload;
-//  if (httpCode > 0)
-//  {                             // Check the returning code
-//    payload = http.getString(); // Get the request response payload
-//    payload.trim();
-//    if (payload.length() > 0)
-//    {
-//      Serial.println(payload + "\n");
-//    }
-//  }
-//
-//  http.end();   // Close connection
-//  delay(60000); // interval 60s
 }
+
+// create func to trun on pump and off pump
